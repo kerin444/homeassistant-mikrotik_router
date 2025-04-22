@@ -1421,6 +1421,7 @@ class MikrotikCoordinator(DataUpdateCoordinator[None]):
             "write" not in self.ds["access"]
             or "policy" not in self.ds["access"]
             or "reboot" not in self.ds["access"]
+            or 1==1
         ):
             return
 
