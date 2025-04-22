@@ -284,11 +284,13 @@ class MikrotikCoordinator(DataUpdateCoordinator[None]):
         self.host_tracking_initialized = False
 
         self.support_capsman = False
+        self.support_wifi = False
         self.support_wireless = False
+        self.support_wifiwave2 = False
         self.support_ppp = False
         self.support_ups = False
         self.support_gps = False
-        self._wifimodule = "wireless"
+        self._wifimodule = None
 
         self.major_fw_version = 0
         self.minor_fw_version = 0
@@ -517,28 +519,33 @@ class MikrotikCoordinator(DataUpdateCoordinator[None]):
             self.support_ppp = True
             self.support_wireless = True
             if "wifiwave2" in packages and packages["wifiwave2"]["enabled"]:
+                self.support_wifiwave2 = True
+                self.support_wifi = False
                 self.support_capsman = False
                 self._wifimodule = "wifiwave2"
                 
             elif "wifi" in packages and packages["wifi"]["enabled"]:
+                self.support_wifiwave2 = False
+                self.support_wifi = True
                 self.support_capsman = False
                 self._wifimodule = "wifi"
                 
             elif "wifi-qcom" in packages and packages["wifi-qcom"]["enabled"]:
+                self.support_wifiwave2 = False
+                self.support_wifi = True
                 self.support_capsman = False
                 self._wifimodule = "wifi"
                 
             elif "wifi-qcom-ac" in packages and packages["wifi-qcom-ac"]["enabled"]:
-                self.support_capsman = False
-                self._wifimodule = "wifi"
-                
-            elif (self.major_fw_version == 7 and self.minor_fw_version >= 13) or self.major_fw_version > 7:
+                self.support_wifiwave2 = False
+                self.support_wifi = True
                 self.support_capsman = False
                 self._wifimodule = "wifi"
                 
             else:
+                self.support_wifiwave2 = False
+                self.support_wifi = False
                 self.support_capsman = True
-                self.support_wireless = bool(self.minor_fw_version < 13)
                 
             _LOGGER.debug("Mikrotik %s wifi module=%s",
                     self.host,
@@ -1380,9 +1387,7 @@ class MikrotikCoordinator(DataUpdateCoordinator[None]):
     # ---------------------------
     def get_system_routerboard(self) -> None:
         """Get routerboard data from Mikrotik"""
-        if self.ds["resource"]["board-name"].startswith("x86") or self.ds["resource"][
-            "board-name"
-        ].startswith("CHR"):
+        if self.ds["resource"]["board-name"] in ("x86", "CHR"):
             self.ds["routerboard"]["routerboard"] = False
             self.ds["routerboard"]["model"] = self.ds["resource"]["board-name"]
             self.ds["routerboard"]["serial-number"] = "N/A"
@@ -1416,7 +1421,6 @@ class MikrotikCoordinator(DataUpdateCoordinator[None]):
             "write" not in self.ds["access"]
             or "policy" not in self.ds["access"]
             or "reboot" not in self.ds["access"]
-            of 1==1
         ):
             return
 
@@ -1430,7 +1434,6 @@ class MikrotikCoordinator(DataUpdateCoordinator[None]):
                     {"name": "cpu-temperature", "default": 0},
                     {"name": "power-consumption", "default": 0},
                     {"name": "board-temperature1", "default": 0},
-                    {"name": "phy-temperature", "default": 0},
                     {"name": "fan1-speed", "default": 0},
                     {"name": "fan2-speed", "default": 0},
                 ],
@@ -1989,11 +1992,13 @@ class MikrotikCoordinator(DataUpdateCoordinator[None]):
     def get_capsman_hosts(self) -> None:
         """Get CAPS-MAN hosts data from Mikrotik"""
         
-        if self.major_fw_version > 7 or (self.major_fw_version == 7 and self.minor_fw_version >= 13):
+        if self.major_fw_version >= 7 and self.minor_fw_version > 12:
             registration_path = "/interface/wifi/registration-table"
+            self._wifimodule = "wifi"
             
         else:
             registration_path= "/caps-man/registration-table"
+            self._wifimodule = "wireless"
             
         self.ds["capsman_hosts"] = parse_api(
             data={},
